@@ -68,7 +68,11 @@ func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 	}
 	writer.Header().Set("Server", "s3_proxy")
 	writer.WriteHeader(resp.StatusCode)
-	io.Copy(writer, resp.Body)
+
+	_, err = io.Copy(writer, resp.Body)
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	fmt.Println(resp)
 }
