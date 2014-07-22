@@ -84,7 +84,6 @@ func main() {
 		Addr: ":8080",
 		Handler: serveMux,
 		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
 
