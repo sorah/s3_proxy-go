@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/mitchellh/goamz/aws"
-	"github.com/mitchellh/goamz/s3"
+	"github.com/crowdmob/goamz/aws"
+	"github.com/crowdmob/goamz/s3"
 
 	"net/http"
 	"time"
@@ -21,6 +21,15 @@ func InitS3() *s3.S3 {
 	return s3.New(auth, aws.Regions[os.Getenv("AWS_REGION")])
 }
 
+func getObject(bucketName string, key string, headers http.Header) (*http.Response, error) {
+	client := InitS3()
+	bucket := client.Bucket(bucketName)
+
+	resp, err := bucket.GetResponseWithHeaders(key, headers)
+
+	return resp, err
+}
+
 func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 	pathes := strings.SplitN(request.URL.Path,"/",3)
 
@@ -29,18 +38,14 @@ func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	client := InitS3()
-
-	bucket := client.Bucket(pathes[1])
-	key := pathes[2]
-
-	resp, err := bucket.GetResponse(key)
+	resp, err:= getObject(pathes[1], pathes[2], request.Header)
 
 	if err != nil {
 		switch s3err := err.(type) {
 		case *s3.Error:
 			xml, xerr := xml.Marshal(s3err)
 			if xerr != nil {
+				// XXX
 				panic(xerr.Error())
 			}
 
@@ -74,7 +79,7 @@ func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 		fmt.Println(err)
 	}
 
-	fmt.Println(resp)
+	fmt.Println(request.Header)
 }
 
 func main() {
