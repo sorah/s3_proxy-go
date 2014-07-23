@@ -12,13 +12,15 @@ import (
 	"strings"
 	"encoding/xml"
 	"io"
-//	"flag"
+	"flag"
 )
 
+var token aws.Auth
+var region aws.Region
+
 func InitS3() *s3.S3 {
-	// XXX
-	auth, _ := aws.EnvAuth()
-	return s3.New(auth, aws.Regions[os.Getenv("AWS_REGION")])
+	token.Token()
+	return s3.New(token, region)
 }
 
 func getObject(bucketName string, key string, headers http.Header) (*http.Response, error) {
@@ -78,19 +80,42 @@ func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	fmt.Println(request.Header)
 }
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	regionNamePtr := flag.String("region", os.Getenv("AWS_REGION"), "AWS region")
+	bindAddress := flag.String("bind", ":2380", "HTTP bind address")
+
+	flag.Parse()
+
+	regionName := *regionNamePtr
+
+	if regionName == "" {
+		regionName = aws.InstanceRegion()
+	}
+
+	if regionName == "unknown" {
+		panic("Can't determine region name")
+	}
+
+	fmt.Printf("s3_proxy starting at %s for %s region\n", *bindAddress, regionName)
+
+	region = aws.Regions[regionName]
+
+	var err error
+	token, err = aws.GetAuth("", "", "", time.Time{})
+	if err != nil {
+		panic(err)
+	}
 
 	serveMux := http.NewServeMux()
 
 	serveMux.HandleFunc("/", HandleRequest)
 
 	httpServ := &http.Server {
-		Addr: ":8080",
+		Addr: *bindAddress,
 		Handler: serveMux,
 		ReadTimeout:    10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
