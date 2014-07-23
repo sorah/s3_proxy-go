@@ -59,12 +59,16 @@ func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 			fmt.Fprintf(writer, "<Error>")
 			writer.Write(xml)
 			fmt.Fprintf(writer, "</Error>")
+
+			if !(300 <= s3err.StatusCode && s3err.StatusCode < 400) {
+				fmt.Printf("AWS returned error: %s\n", xml)
+			}
 		default:
 			writer.Header().Set("Server", "s3_proxy")
 			writer.WriteHeader(500)
 			fmt.Fprintf(writer, "%s", err.Error())
+			fmt.Println(err)
 		}
-		fmt.Println(err)
 		return
 	}
 
