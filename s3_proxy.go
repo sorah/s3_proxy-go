@@ -23,15 +23,6 @@ func InitS3() *s3.S3 {
 	return s3.New(token, region)
 }
 
-func getObject(bucketName string, key string, headers http.Header) (*http.Response, error) {
-	client := InitS3()
-	bucket := client.Bucket(bucketName)
-
-	resp, err := bucket.GetResponseWithHeaders(key, headers)
-
-	return resp, err
-}
-
 func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 	pathes := strings.SplitN(request.URL.Path,"/",3)
 
@@ -39,8 +30,25 @@ func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 		http.NotFound(writer, request)
 		return
 	}
+	bucket, key := pathes[1], pathes[2]
 
-	resp, err:= getObject(pathes[1], pathes[2], request.Header)
+	if request.Method != "GET" && request.Method != "HEAD" {
+		http.Error(writer, "405 Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	client := InitS3()
+	var (
+		resp *http.Response
+		err error
+	)
+
+	switch request.Method {
+	case "GET":
+		resp, err = client.Bucket(bucket).GetResponseWithHeaders(key, request.Header)
+	case "HEAD":
+		resp, err = client.Bucket(bucket).Head(key, request.Header)
+	}
 
 	if err != nil {
 		switch s3err := err.(type) {
@@ -55,10 +63,12 @@ func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 			writer.Header().Set("Content-Type", "application/xml")
 			writer.WriteHeader(s3err.StatusCode)
 
-			fmt.Fprintf(writer, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
-			fmt.Fprintf(writer, "<Error>")
-			writer.Write(xml)
-			fmt.Fprintf(writer, "</Error>")
+			if (request.Method != "HEAD") {
+				fmt.Fprintf(writer, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+				fmt.Fprintf(writer, "<Error>")
+				writer.Write(xml)
+				fmt.Fprintf(writer, "</Error>")
+			}
 
 			if !(300 <= s3err.StatusCode && s3err.StatusCode < 400) {
 				fmt.Printf("AWS returned error: %s\n", xml)
@@ -66,7 +76,9 @@ func HandleRequest(writer http.ResponseWriter, request *http.Request) {
 		default:
 			writer.Header().Set("Server", "s3_proxy")
 			writer.WriteHeader(500)
-			fmt.Fprintf(writer, "%s", err.Error())
+			if (request.Method != "HEAD") {
+				fmt.Fprintf(writer, "%s", err.Error())
+			}
 			fmt.Println(err)
 		}
 		return
